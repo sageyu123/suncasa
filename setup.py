@@ -22,6 +22,7 @@ extras['all'] = list(set(list(chain.from_iterable(ex_extras.values()))))
 
 setup(
     extras_require=extras,
-    use_scm_version={'write_to': os.path.join('suncasa', '_version.py')},
+    # use_scm_version={'write_to': os.path.join('suncasa', '_version.py')},
+    version='0.1.0',
     ext_modules=get_extensions(),
 )
