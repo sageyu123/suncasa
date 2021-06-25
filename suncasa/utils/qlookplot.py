@@ -4,23 +4,41 @@ import os, sys
 # from config import get_and_create_download_dir
 import shutil
 from astropy.io import fits
-
-try:
-    # For Python 3.0 and later
-    from urllib.request import urlopen
-except ImportError:
-    # Fall back to Python 2's urllib2
-    from urllib2 import urlopen
-from split_cli import split_cli as split
-from ptclean3_cli import ptclean3_cli as ptclean3
 from suncasa.utils import helioimage2fits as hf
 import sunpy
 import sunpy.map as smap
 from astropy import units as u
 from astropy.time import Time
 from astropy.io import fits
-from taskinit import ms, tb, qa, iatool
-from tclean_cli import tclean_cli as tclean
+
+sunpy1 = sunpy.version.major>=1
+py3 = sys.version_info.major>=3
+if py3:
+    # For Python 3.0 and later
+    from urllib.request import urlopen
+else:
+    # Fall back to Python 2's urllib2
+    from urllib2 import urlopen
+
+try:
+    ## Full Installation of CASA 4, 5 and 6
+    from split_cli import split_cli as split
+    from ptclean3_cli import ptclean3_cli as ptclean3
+    from taskinit import ms, tb, qa, iatool
+    from tclean_cli import tclean_cli as tclean
+except:
+    ## Modular Installation of CASA 6
+    from casatools import table as tbtool
+    from casatools import ms as mstool
+    from casatools import quanta as qatool
+    from casatools import image as iatool
+    tb = tbtool()
+    ms = mstool()
+    qa = qatool()
+    ia = iatool()
+    from casatasks import tclean
+    from casatasks import split
+
 from matplotlib.dates import DateFormatter
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
@@ -28,7 +46,7 @@ import pickle
 import datetime
 import matplotlib as mpl
 import matplotlib.cm as cm
-import sunpy.cm.cm as cm_sunpy
+
 import matplotlib.colors as colors
 import matplotlib.patches as patches
 from matplotlib import gridspec
@@ -42,6 +60,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from suncasa.utils import plot_mapX as pmX
 from suncasa.utils import fitsutils as fu
 from tqdm import tqdm
+if not sunpy1:
+    import sunpy.cm.cm as cm_sunpy
+
 
 polmap = {'RR': 0, 'LL': 1, 'I': 0, 'V': 1, 'XX': 0, 'YY': 1}
 
@@ -296,7 +317,11 @@ def get_rdata_dict(rdata, ndim, stokaxis, npol_fits, icmap=None, stokes='I,V', s
                 datas[pols[0]] = rdata[slc1]
                 cmaps[pols[0]] = cmap_I
     if stokaxis is not None:
-        for k, v in datas.iteritems():
+        if not py3:
+            iterop_ = datas.iteritems()
+        else:
+            iterop_ = datas.items()
+        for k, v in iterop_:
             datas[k] = np.squeeze(v, axis=stokaxis)
     return cmaps, datas
 
@@ -430,7 +455,11 @@ def mk_qlook_image(vis, ncpu=10, timerange='', twidth=12, stokes='I,V', antenna=
                 fi.write('import warnings \n')
                 fi.write('warnings.filterwarnings("ignore") \n')
             ostrs = []
-            for k, v in inpdict.iteritems():
+            if not py3:
+                iterop_ = inpdict.iteritems()
+            else:
+                iterop_ = inpdict.items()
+            for k, v in iterop_:
                 ostrs.append('{}={}'.format(k, v))
             ostr = ','.join(ostrs)
             fi.write('res = ptclean3({}) \n'.format(ostr))
@@ -538,7 +567,10 @@ def plt_qlook_image(imres, timerange='', figdir=None, specdata=None, verbose=Tru
 
     from matplotlib import pyplot as plt
     from sunpy import map as smap
-    from sunpy import sun
+    if sunpy1:
+        from sunpy.coordinates import sun
+    else:
+        from sunpy import sun
     import astropy.units as u
     if not figdir:
         figdir = './'
@@ -556,7 +588,11 @@ def plt_qlook_image(imres, timerange='', figdir=None, specdata=None, verbose=Tru
     tpltidxs, = np.where(np.logical_and(btimes.jd >= t_ran[0].jd, etimes.jd <= t_ran[1].jd))
     # imres = imres['imres']
     # if type(imres) is not dict:
-    for k, v in imres.iteritems():
+    if not py3:
+        iterop_ = imres.iteritems()
+    else:
+        iterop_ = imres.items()
+    for k, v in iterop_:
         imres[k] = list(np.array(v)[tpltidxs])
     if 'Obs' in imres.keys():
         observatory = imres['Obs'][0]
@@ -1458,7 +1494,10 @@ def qlookplot(vis, timerange=None, spw='', workdir='./', specfile=None, uvrange=
         # third part
         # start to download the fits files
         if plotaia:
-            cmap_aia = cm_sunpy.get_cmap('sdoaia{}'.format(aiawave))
+            if sunpy1:
+                cmap_aia = plt.get_cmap('sdoaia{}'.format(aiawave))
+            else:
+                cmap_aia = cm_sunpy.get_cmap('sdoaia{}'.format(aiawave))
             if not aiafits:
                 try:
                     newlist = trange2aiafits(Time([starttim1, endtim1]), aiawave, aiadir)
@@ -1689,8 +1728,12 @@ def qlookplot(vis, timerange=None, spw='', workdir='./', specfile=None, uvrange=
                 row, col = rmap.data.shape
                 positon = np.nanargmax(rmap.data)
                 m, n = divmod(positon, col)
-                x0 = rmap.xrange[0] + rmap.scale[1] * (n + 0.5) * u.pix
-                y0 = rmap.yrange[0] + rmap.scale[0] * (m + 0.5) * u.pix
+                if sunpy1:
+                    x0 = rmap.bottom_left_coord.Tx + rmap.scale[1] * (n + 0.5) * u.pix
+                    y0 = rmap.bottom_left_coord.Ty + rmap.scale[0] * (m + 0.5) * u.pix
+                else:
+                    x0 = rmap.xrange[0] + rmap.scale[1] * (n + 0.5) * u.pix
+                    y0 = rmap.yrange[0] + rmap.scale[0] * (m + 0.5) * u.pix
             if len(fov) == 1:
                 fov = [fov] * 2
             sz_x = fov[0] * u.arcsec
